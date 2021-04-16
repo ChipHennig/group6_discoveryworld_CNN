@@ -1,5 +1,5 @@
 from PreliminaryCaching import has_cached_emotions, cache_emotions
-from ImageSequence import ImageSequence
+from ImageSequences import BasicImageSequence, TrainingSequence
 
 import pandas as pd
 import math
@@ -24,7 +24,7 @@ EMOTION_COUNT = 11
 BATCH_SIZE = 64
 
 # Number of epochs to have the model train for
-EPOCHS = 10
+EPOCHS = 1
 
 
 def read_cached_emotions(partition):
@@ -108,8 +108,8 @@ def train_model(model, training_data, validation_data):
     """
 
     # Initialize generators that only load small portion of dataset to train on at a time.
-    train_generator = ImageSequence(training_data, "/data/datasets/affectNet/train_set/images", BATCH_SIZE)
-    validation_generator = ImageSequence(validation_data, "/data/datasets/affectNet/val_set/images", BATCH_SIZE)
+    train_generator = TrainingSequence(training_data, "/data/datasets/affectNet/train_set/images", BATCH_SIZE)
+    validation_generator = BasicImageSequence(validation_data, "/data/datasets/affectNet/val_set/images")
 
     checkpoint = ModelCheckpoint("model_weights.h5", monitor='val_acc', verbose=1, save_best_only=True, mode='max')
 
@@ -123,10 +123,9 @@ def train_model(model, training_data, validation_data):
         callbacks = [checkpoint]
     )
 
-    # Write model structure to JSON
-    model_json = model.to_json()
-    with open("model.json", "w") as json_file:
-        json_file.write(model_json)
+    return model, history
+
+    
 
 
 ######
@@ -137,8 +136,13 @@ def train_model(model, training_data, validation_data):
 if not has_cached_emotions():
     cache_emotions()
 
-train_model(
+model, history = train_model(
     create_model(),
     read_cached_emotions("train"),
     read_cached_emotions("validation")
 )
+
+# Write model structure to JSON
+model_json = model.to_json()
+with open("model.json", "w") as json_file:
+        json_file.write(model_json)
