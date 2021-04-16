@@ -5,26 +5,21 @@ import pandas as pd
 import math
 import numpy as np
 import matplotlib.pyplot as plt
+import os
+import argparse
+import sys
 from tensorflow.keras.layers import Dense, Input, Dropout, GlobalAveragePooling2D, Flatten, Conv2D, BatchNormalization, Activation, MaxPooling2D
-from tensorflow.keras.models import Model
+from tensorflow.keras.models import Model, load_model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras import Sequential
 from tensorflow.keras.layers import Conv2D, Flatten, Dense
 from tensorflow.keras.utils import Sequence
 from tensorflow.keras.callbacks import ModelCheckpoint
-import os
 from pathlib import Path
-
 
 
 # Number of emotions we are predicting.
 EMOTION_COUNT = 11
-
-# Number of images to feed into the CNN for each batch
-BATCH_SIZE = 64
-
-# Number of epochs to have the model train for
-EPOCHS = 1
 
 
 def read_cached_emotions(partition):
@@ -98,51 +93,89 @@ def create_model():
 
 
 # TODO add support for continuing training from a prior state.
-def train_model(model, training_data, validation_data):
+def train_model(model, training_data, validation_data, epochs, batch_size, save_directory):
     """
     Trains a model with the given training and validation data.
 
     @param model CNN model to train.
     @param training_data Map<Int, Int> that maps image ids to emotions.
     @param validation_data Map<Int, Int> that maps image ids to emotions.
+    @param epochs Number of epochs to train for
+    @param batch_size Batch size to use
+    @param save_directory Directory to save model checkpoints to.
     """
 
     # Initialize generators that only load small portion of dataset to train on at a time.
-    train_generator = TrainingSequence(training_data, "/data/datasets/affectNet/train_set/images", BATCH_SIZE)
+    train_generator = TrainingSequence(training_data, "/data/datasets/affectNet/train_set/images", batch_size)
     validation_generator = BasicImageSequence(validation_data, "/data/datasets/affectNet/val_set/images")
 
-    checkpoint = ModelCheckpoint("model_weights.h5", monitor='val_acc', verbose=1, save_best_only=True, mode='max')
+    # Include the epoch in the file name (uses `str.format`)
+    checkpoint_path = save_directory + "/checkpoints/cp-{epoch:04d}.ckpt"
+
+    # Saves the model's weights every 100 batches in case something goes wrong.
+    checkpoint_callback = ModelCheckpoint(filepath=checkpoint_path, verbose=1, save_weights_only=True, save_freq=100)
+    model.save_weights(checkpoint_path.format(epoch=0))
 
     # TODO I think we can store history? Could be helpful for displaying graphs and stuff later.
     history = model.fit_generator(
         generator=train_generator,
         steps_per_epoch=len(train_generator),
-        epochs=EPOCHS,
+        epochs=epochs,
         validation_data = validation_generator,
         validation_steps = len(validation_generator),
-        callbacks = [checkpoint]
+        callbacks = [checkpoint_callback]
     )
 
     return model, history
 
-    
+
+def get_commandline_args():
+    """
+    Parses command line information from the user that will be used in training.
+
+    @return Object that contains the following values:
+        epochs - Number of epochs to train for. Is always greater than 1.
+        save_directory - Directory to save model information to. This includes the model checkpoints.
+        batch_size - Batch size to use. Default is 32. Is always greater than 1.
+        model_file - Specifies location of model to load and start training again. If `None` a new model should be created.
+    """
+
+    # See https://docs.python.org/3/library/argparse.html
+    parser = argparse.ArgumentParser(description="Trains CNN for emotion recognition on the AffectNet dataset.")
+    parser.add_argument("epochs", type=int, help="Number of epochs to train the model for.")
+    parser.add_argument("save_directory", type=str, help="Directory to save the trained model and its checkpoints to.")
+    parser.add_argument("--batch_size", type=int, default=32, help="Batch size to train model with.")
+    parser.add_argument("--model_file", type=str, default=None, help="Optional. Continue training model at given location. The model is then saved to 'save_location'.")
+    args = parser.parse_args()
+
+    if args.epochs < 1:
+        sys.exit("Epochs must be greater than 1.")
+
+    if args.batch_size < 1:
+        sys.exit("Batch size must be greater than 1.")
+
+    return args 
 
 
 ######
 # Main
 ######
 
+args = get_commandline_args()
+
 # Cache dataset info for more efficient training if this hasn't already been done.
 if not has_cached_emotions():
     cache_emotions()
 
-model, history = train_model(
-    create_model(),
+model = create_model() if args.model_file is None else load_model(args.model_file)
+
+trained_model, history = train_model(
+    model,
     read_cached_emotions("train"),
-    read_cached_emotions("validation")
+    read_cached_emotions("validation"),
+    args.epochs,
+    args.batch_size,
+    args.save_directory
 )
 
-# Write model structure to JSON
-model_json = model.to_json()
-with open("model.json", "w") as json_file:
-        json_file.write(model_json)
+trained_model.save(args.save_directory + "/TrainedModel")
