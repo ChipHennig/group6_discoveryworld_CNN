@@ -1,5 +1,5 @@
-from PreliminaryCaching import has_cached_emotions, cache_emotions
-from ImageSequences import BasicImageSequence, TrainingSequence
+from .PreliminaryCaching import has_cached_emotions, cache_emotions
+from .ImageSequences import BasicImageSequence, TrainingSequence
 
 import pandas as pd
 import math
