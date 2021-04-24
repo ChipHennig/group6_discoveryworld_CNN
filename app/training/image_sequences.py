@@ -1,10 +1,12 @@
 from tensorflow.keras.utils import Sequence
 from tensorflow.keras.preprocessing.image import load_img
 from keras.utils import to_categorical
+from app.common.face_detection import get_face_bounding_boxes, extract_faces
 from PIL import Image
 import numpy as np
 import math
 import random
+from app.common.face_detection import get_face_bounding_boxes, extract_faces
 
 
 class BasicImageSequence(Sequence):
@@ -192,11 +194,21 @@ def load_image(image_id, partition_folder):
     @image_id Id of image to load.
     @partition_folder Folder containing the image.
     """
-        
-    return np.asarray(load_img(
+
+    image = np.asarray(load_img(
         f"{partition_folder}/{image_id}.jpg",
         grayscale=False,
         color_mode='rgb',
         target_size=None,
         interpolation='nearest'
     ))
+
+    # Get most likely bounds for face.
+    bounds = get_face_bounding_boxes(image, 0.0)[0]
+
+    # Return image as is if no face can be found.
+    if len(bounds) == 0:
+        print("Warning: Couldn't find face in image.")
+        return image
+
+    return extract_faces(image, bounds)

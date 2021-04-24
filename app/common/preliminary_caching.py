@@ -4,6 +4,10 @@ import csv
 import os
 from pathlib import Path
 import numpy as np
+import pandas as pd
+
+
+base_path = Path(__file__).parent
 
 
 def load_affectnet_examples(partition_folder):
@@ -77,5 +81,14 @@ def has_cached_emotions():
 
     @returns boolean that describes if the appropriate files exist. 
     """
-    base_path = Path(__file__).parent
-    return Path(f"{base_path}/data/AffectNet/train.csv").exists() and Path(f"{base_path}/data/AffectNet/validation.csv").exists()
+    
+    return Path(f"{base_path}/training/data/AffectNet/train.csv").exists() and Path(f"{base_path}/training/data/AffectNet/validation.csv").exists()
+
+
+def read_cached_emotions(partition):
+    """
+    Reads in cached emotion data as a Map<Int, Int> that maps an image ID to an emotion.
+
+    @partition Partition of the dataset. Ex: Train, Validation
+    """
+    return pd.read_csv(f"{base_path}/training/data/AffectNet/{partition}.csv", header=None, index_col=0, squeeze=True).to_dict()
