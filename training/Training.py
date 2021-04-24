@@ -2,18 +2,14 @@ from PreliminaryCaching import has_cached_emotions, cache_emotions
 from ImageSequences import BasicImageSequence, TrainingSequence
 
 import pandas as pd
-import math
-import numpy as np
-import matplotlib.pyplot as plt
-import os
 import argparse
+
 import sys
 from tensorflow.keras.layers import Dense, Input, Dropout, GlobalAveragePooling2D, Flatten, Conv2D, BatchNormalization, Activation, MaxPooling2D
 from tensorflow.keras.models import Model, load_model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras import Sequential
 from tensorflow.keras.layers import Conv2D, Flatten, Dense
-from tensorflow.keras.utils import Sequence
 from tensorflow.keras.callbacks import ModelCheckpoint
 from pathlib import Path
 
