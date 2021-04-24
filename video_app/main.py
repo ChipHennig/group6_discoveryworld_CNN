@@ -86,7 +86,7 @@ def predict_emotions(frame, bounds):
     input_data = np.squeeze(np.array(faces))
     input_data = np.expand_dims(input_data, 0)
     input_data = np.expand_dims(input_data, -1)
-    predictions = model.predict(input_data)
+    predictions = model.predict(input_datag)
 
     return np.argmax(predictions)
 
