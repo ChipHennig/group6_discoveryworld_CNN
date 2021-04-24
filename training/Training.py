@@ -14,7 +14,8 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras import Sequential
 from tensorflow.keras.layers import Conv2D, Flatten, Dense
 from tensorflow.keras.utils import Sequence
-from tensorflow.keras.callbacks import ModelCheckpoint
+from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
+from tensorflow.keras.applications.resnet import ResNet50
 from pathlib import Path
 
 
@@ -38,58 +39,19 @@ def create_model():
     Creates a CNN with 224x224 inputs and `EMOTION_COUNT` outputs.
     """
 
-    # Initialising the CNN
-    model = Sequential()
+    base_model = ResNet50(include_top = True, weights = "imagenet")
 
-    # 1 - Convolution
-    model.add(Conv2D(64,(3,3), padding='same', input_shape=(224, 224, 1)))
-    model.add(BatchNormalization())
-    model.add(Activation('relu'))
-    model.add(MaxPooling2D(pool_size=(2, 2)))
-    model.add(Dropout(0.25))
+    new_output = Dense(EMOTION_COUNT)(base_model.layers[-1].output)
+    new_model = Model(inputs=base_model.input, outputs=new_output)
 
-    # 2nd Convolution layer
-    model.add(Conv2D(128,(5,5), padding='same'))
-    model.add(BatchNormalization())
-    model.add(Activation('relu'))
-    model.add(MaxPooling2D(pool_size=(2, 2)))
-    model.add(Dropout(0.25))
+    # Leave last 10 layers trainable.
+    for layer in new_model.layers[:-10]:
+        layer.trainable = False
 
-    # 3rd Convolution layer
-    model.add(Conv2D(512,(3,3), padding='same'))
-    model.add(BatchNormalization())
-    model.add(Activation('relu'))
-    model.add(MaxPooling2D(pool_size=(2, 2)))
-    model.add(Dropout(0.25))
+    opt = Adam(lr=0.00001)
+    new_model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
 
-    # 4th Convolution layer
-    model.add(Conv2D(512,(3,3), padding='same'))
-    model.add(BatchNormalization())
-    model.add(Activation('relu'))
-    model.add(MaxPooling2D(pool_size=(2, 2)))
-    model.add(Dropout(0.25))
-
-    # Flattening
-    model.add(Flatten())
-
-    # Fully connected layer 1st layer
-    model.add(Dense(256))
-    model.add(BatchNormalization())
-    model.add(Activation('relu'))
-    model.add(Dropout(0.25))
-
-    # Fully connected layer 2nd layer
-    model.add(Dense(512))
-    model.add(BatchNormalization())
-    model.add(Activation('relu'))
-    model.add(Dropout(0.25))
-
-    model.add(Dense(EMOTION_COUNT, activation='softmax'))
-
-    opt = Adam(lr=0.0001)
-    model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
-
-    return model
+    return new_model
 
 
 # TODO add support for continuing training from a prior state.
@@ -116,6 +78,12 @@ def train_model(model, training_data, validation_data, epochs, batch_size, save_
     checkpoint_callback = ModelCheckpoint(filepath=checkpoint_path, verbose=1, save_weights_only=True, save_freq=100)
     model.save_weights(checkpoint_path.format(epoch=0))
 
+    # Decrease learning rate by a factor of 5 if no improvement is seen after 3 epochs.
+    learning_rate_callback = ReduceLROnPlateau(
+        monitor='val_loss', factor=0.2, patience=3, verbose=0,
+        mode='auto', min_delta=0.0001, cooldown=0, min_lr=0
+    )
+
     # TODO I think we can store history? Could be helpful for displaying graphs and stuff later.
     history = model.fit_generator(
         generator=train_generator,
@@ -123,7 +91,7 @@ def train_model(model, training_data, validation_data, epochs, batch_size, save_
         epochs=epochs,
         validation_data = validation_generator,
         validation_steps = len(validation_generator),
-        callbacks = [checkpoint_callback]
+        callbacks = [checkpoint_callback, learning_rate_callback]
     )
 
     return model, history

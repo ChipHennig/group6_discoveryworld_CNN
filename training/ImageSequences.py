@@ -46,7 +46,6 @@ class BasicImageSequence(Sequence):
 
         # Must pad some extra dimension or tensorflow will complain when hooking up to model
         X = np.expand_dims(X, axis=0) 
-        X = np.expand_dims(X, axis=3)
         y = np.expand_dims(y, axis=0)
         
         return X, y
@@ -109,9 +108,8 @@ class TrainingSequence(Sequence):
         """
         
         X = np.array(list(map(self.__load_augmented_image__, ids)))
-        X = np.expand_dims(X, axis=3) # Must pad extra dimension or tensorflow will complain when hooking up to model
         y = np.array(to_categorical(list(map(lambda id: self.emotion_map[id], ids)), 11))
-        
+
         return X, y
     
 
@@ -198,7 +196,7 @@ def load_image(image_id, partition_folder):
     return np.asarray(load_img(
         f"{partition_folder}/{image_id}.jpg",
         grayscale=False,
-        color_mode='grayscale', # Might need to change back to 'rgb'
+        color_mode='rgb',
         target_size=None,
         interpolation='nearest'
     ))
