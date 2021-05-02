@@ -7,9 +7,7 @@ import numpy as np
 import pandas as pd
 
 
-base_path = Path(__file__).parent.parent.parent
-print(base_path)
-
+base_path = Path(__file__).parent.parent
 
 def load_affectnet_examples(partition_folder):
     
