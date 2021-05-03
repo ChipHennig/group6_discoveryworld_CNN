@@ -1,16 +1,15 @@
-# TODO Eventually we will also want to run the race detector on all images and then cache those results in a csv file.
-# This make take several hours but will allow us to stratify by race efficiently.
 import csv
 import os
 from pathlib import Path
 import numpy as np
 import pandas as pd
 import face_extractor
+import fairface
 import matplotlib.image as mpimg
 
 base_path = Path(__file__).parent.parent
 
-def load_affectnet_examples(partition_folder):
+def load_affectnet_examples(partition_folder, include_fairface_7=False):
     
     """
     Loads a map of image IDs to (emotions, min_x, min_y, max_x, max_y) from a certain parition of AffectNet.
@@ -20,7 +19,8 @@ def load_affectnet_examples(partition_folder):
     all images, and extracting the ID from the file name, and then reading the appropriate emotion file.
 
     @partition_folder Folder to read affect net examples from. Ex: Train or Validation
-    @returns Map<Int, (Int,Int,Int,Int,Int)> that maps an image ID to a tuple of the emotion followed by the boundaries
+    @returns Map<Int, (Int,Int,Int,Int,Int,Int, ?(Int,Int,Int))> (last 3 depend on include_fairface7)
+        that maps an image ID to a tuple of the emotion followed by the boundaries
     """
 
     emotion_map = dict()
@@ -37,8 +37,16 @@ def load_affectnet_examples(partition_folder):
         bounding_box = face_extractor.get_face_bounding_boxes(actual_image, 0.0,1)
 
         if len(bounding_box)>0:
+            face = face_extractor.extract_faces(actual_image, bounding_box)[0]
+            race4 = fairface.predict_race4(face)
+
             bounding_box = bounding_box[0]
-            emotion_map[image_id] = (emotion, bounding_box[1], bounding_box[2], bounding_box[3], bounding_box[4])
+            emotion_map[image_id] = (emotion[()], bounding_box[1], bounding_box[2], 
+                bounding_box[3], bounding_box[4], race4)
+
+            if include_fairface_7:
+                race7, age, gender = fairface.predict_race7(face)
+                emotion_map[image_id] += (race7, age, gender)
 
     print(f"\rLoaded {len(emotion_map)} examples from {partition_folder}")
     
@@ -54,11 +62,12 @@ def write_affectnet_info(emotion_map, partition):
     @param partition Partition to save. This is used as the CSV name. Ex: Train, Validation
     """
 
-    with open(f"{partition}1.csv", 'w+', newline='') as csvfile:
+    with open(f"{base_path}/data/AffectNet/{partition}.csv", 'w+', newline='') as csvfile:
         writer = csv.writer(csvfile, delimiter=',', quotechar="\"", quoting=csv.QUOTE_MINIMAL)
         for entry in emotion_map:
             data = emotion_map[entry]
-            writer.writerow([entry, data[0],data[1],data[2],data[3],data[4]])
+            row = [entry] + list(data)
+            writer.writerow(row)
 
 
 def cache_emotions():
@@ -98,5 +107,5 @@ def read_cached_emotions(partition):
     emotion_map = {}
     df = pd.read_csv(f"{base_path}/data/AffectNet/{partition}.csv", header=None, index_col=0, squeeze=True)
     for index, row in df.iterrows():
-        emotion_map[index] = (row[1],row[2],row[3],row[4],row[5])
+        emotion_map[row[0]] = tuple(row[1:])
     return emotion_map
