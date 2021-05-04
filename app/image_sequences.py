@@ -1,10 +1,14 @@
 from tensorflow.keras.utils import Sequence
 from tensorflow.keras.preprocessing.image import load_img
+from tensorflow.keras.applications.resnet import preprocess_input
+from tensorflow.image import random_flip_left_right
 from keras.utils import to_categorical
 from PIL import Image
 import numpy as np
 import math
 import random
+from face_extractor import get_face_bounding_boxes, extract_faces
+import matplotlib.image as mpimg
 
 
 class BasicImageSequence(Sequence):
@@ -110,10 +114,10 @@ class TrainingSequence(Sequence):
         X = np.array(list(map(self.__load_augmented_image__, ids)))
         y = np.array(to_categorical(list(map(lambda id: self.emotion_map[id], ids)), 11))
 
-        return X, y
+        # Since we are using Resnet50, we preprocess the images in the way it expects.
+        return preprocess_input(X), y
     
 
-    # TODO Add support for color images.
     def __load_augmented_image__(self, image_id):
         """
         Loads a single image as a 2d numpy array given an id.
@@ -122,9 +126,8 @@ class TrainingSequence(Sequence):
         """
         
         image = load_image(image_id, self.partition_folder)
-        
-        # TODO Do some augmentation
-        return np.asarray(image)
+        return random_flip_left_right(image)
+
 
     def __calculate_min_class_size__(self, emotion_lists):
         """
@@ -183,7 +186,6 @@ class TrainingSequence(Sequence):
         self.current_ids = self.__calculate_current_ids__()
 
 
-# TODO Add support for color images.
 # TODO Run image through face extractor and return distored image.
 def load_image(image_id, partition_folder):
     """
@@ -192,11 +194,16 @@ def load_image(image_id, partition_folder):
     @image_id Id of image to load.
     @partition_folder Folder containing the image.
     """
-        
-    return np.asarray(load_img(
-        f"{partition_folder}/{image_id}.jpg",
-        grayscale=False,
-        color_mode='rgb',
-        target_size=None,
-        interpolation='nearest'
-    ))
+
+    image = mpimg.imread(f"{partition_folder}/{image_id}.jpg")
+    
+    # Get most likely bounds for face.
+    bounds = get_face_bounding_boxes(image, 0.0, 1)
+
+    # If no face was found we will just use the entire image.
+    if len(bounds) > 0:
+        image = extract_faces(image, bounds)[0]
+    else:
+        print(f"Could not locate face in image with id: {image_id}")
+
+    return image 

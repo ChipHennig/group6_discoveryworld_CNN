@@ -1,5 +1,5 @@
-from PreliminaryCaching import has_cached_emotions, cache_emotions
-from ImageSequences import BasicImageSequence, TrainingSequence
+from preliminary_caching import has_cached_emotions, cache_emotions, read_cached_emotions
+from image_sequences import BasicImageSequence, TrainingSequence
 
 import pandas as pd
 import math
@@ -23,17 +23,6 @@ from pathlib import Path
 EMOTION_COUNT = 11
 
 
-def read_cached_emotions(partition):
-    """
-    Reads in cached emotion data as a Map<Int, Int> that maps an image ID to an emotion.
-
-    @partition Partition of the dataset. Ex: Train, Validation
-    """
-    return pd.read_csv(f"{Path(__file__).parent}/data/AffectNet/{partition}.csv", header=None, index_col=0, squeeze=True).to_dict()
-
-
-# TODO Replace with pretrained model
-# TODO Maybe make work with color?
 def create_model():
     """
     Creates a CNN with 224x224 inputs and `EMOTION_COUNT` outputs.
@@ -44,17 +33,12 @@ def create_model():
     new_output = Dense(EMOTION_COUNT)(base_model.layers[-1].output)
     new_model = Model(inputs=base_model.input, outputs=new_output)
 
-    # Leave last 10 layers trainable.
-    for layer in new_model.layers[:-10]:
-        layer.trainable = False
-
     opt = Adam(lr=0.00001)
     new_model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
 
     return new_model
 
 
-# TODO add support for continuing training from a prior state.
 def train_model(model, training_data, validation_data, epochs, batch_size, save_directory):
     """
     Trains a model with the given training and validation data.
