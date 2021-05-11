@@ -1,4 +1,4 @@
-from preliminary_caching import has_cached_emotions, cache_emotions, read_cached_emotions
+from preliminary_caching import has_cached_emotions, cache_emotions, read_cached_data, filter_emotion_data
 from image_sequences import BasicImageSequence, TrainingSequence
 
 import pandas as pd
@@ -30,11 +30,8 @@ def create_model():
 
     base_model = ResNet50(include_top = True, weights = "imagenet")
 
-    new_output = Dense(EMOTION_COUNT)(base_model.layers[-1].output)
+    new_output = Dense(EMOTION_COUNT, "softmax")(base_model.layers[-2].output)
     new_model = Model(inputs=base_model.input, outputs=new_output)
-
-    opt = Adam(lr=0.00001)
-    new_model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
 
     return new_model
 
@@ -50,21 +47,27 @@ def train_model(model, training_data, validation_data, epochs, batch_size, save_
     @param batch_size Batch size to use
     @param save_directory Directory to save model checkpoints to.
     """
+    
+    for i in range(len(model.layers) - 20):
+        model.layers[i].trainable = False
+
+    opt = Adam(lr=1e-4)
+    model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
 
     # Initialize generators that only load small portion of dataset to train on at a time.
-    train_generator = TrainingSequence(training_data, "/data/datasets/affectNet/train_set/images", batch_size)
-    validation_generator = BasicImageSequence(validation_data, "/data/datasets/affectNet/val_set/images")
+    train_generator = TrainingSequence(training_data, batch_size)
+    validation_generator = BasicImageSequence(validation_data)
 
     # Include the epoch in the file name (uses `str.format`)
     checkpoint_path = save_directory + "/checkpoints/cp-{epoch:04d}.ckpt"
 
     # Saves the model's weights every 100 batches in case something goes wrong.
-    checkpoint_callback = ModelCheckpoint(filepath=checkpoint_path, verbose=1, save_weights_only=True, save_freq=100)
+    checkpoint_callback = ModelCheckpoint(filepath=checkpoint_path, verbose=1, save_weights_only=False, save_freq=100)
     model.save_weights(checkpoint_path.format(epoch=0))
 
-    # Decrease learning rate by a factor of 5 if no improvement is seen after 3 epochs.
+    # Decrease learning rate by a factor of 10 if no improvement is seen after 3 epochs.
     learning_rate_callback = ReduceLROnPlateau(
-        monitor='val_loss', factor=0.2, patience=3, verbose=0,
+        monitor='val_loss', factor=0.1, patience=3, verbose=0,
         mode='auto', min_delta=0.0001, cooldown=0, min_lr=0
     )
 
@@ -108,7 +111,6 @@ def get_commandline_args():
 
     return args 
 
-
 ######
 # Main
 ######
@@ -121,10 +123,14 @@ if not has_cached_emotions():
 
 model = create_model() if args.model_file is None else load_model(args.model_file)
 
+# Filter out emotions we dont want to train on.
+filtered_training_data = filter_emotion_data(read_cached_data("train"), [4, 5, 7, 8, 9, 10])
+filtered_validation_data = filter_emotion_data(read_cached_data("validation"), [4, 5, 7, 8, 9, 10])
+
 trained_model, history = train_model(
     model,
-    read_cached_emotions("train"),
-    read_cached_emotions("validation"),
+    filtered_training_data,
+    filtered_validation_data,
     args.epochs,
     args.batch_size,
     args.save_directory

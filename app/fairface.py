@@ -60,10 +60,9 @@ def predict_race4(face):
     race_score = np.exp(race_outputs) / np.sum(np.exp(race_outputs))
     race_pred = np.argmax(race_score)
 
-    race_scores_fair_4 = race_score
     race_preds_fair_4 = race_pred
 
-    return race_preds_fair_4
+    return [race_preds_fair_4]
 
     
 def predict_race7(face):
@@ -104,12 +103,9 @@ def predict_race7(face):
     gender_pred = np.argmax(gender_score)
     age_pred = np.argmax(age_score)
 
-    race_scores_fair = race_score
-    gender_scores_fair = gender_score
-    age_scores_fair = age_score
-
     race_preds_fair = race_pred
     gender_preds_fair = gender_pred
     age_preds_fair = age_pred
 
-    return race_preds_fair, age_preds_fair, gender_preds_fair
+    return [race_preds_fair, age_preds_fair, gender_preds_fair]
+
