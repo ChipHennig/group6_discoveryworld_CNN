@@ -22,22 +22,20 @@ class BasicImageSequence(Sequence):
 
     See: tensorflow.org/api_docs/python/tf/keras/utils/Sequence for more info.
 
-    @param emotion_map Map<Int, Int> that maps image ids to an emotion.
-    @param partition_folder Folder that contains the images to read.
+    @param image_data_map Map<Int, Int> that maps image ids to an emotion.
     """
     
-    def __init__(self, emotion_map, partition_folder):
+    def __init__(self, image_data_map):
         
-        self.emotion_map = emotion_map
-        self.ids = list(emotion_map.keys())
-        self.partition_folder = partition_folder
+        self.image_data_map = image_data_map
+        self.image_paths = list(image_data_map.keys())
 
 
     def __len__(self):
         """
         Returns number of images in an epoch.
         """
-        return len(self.ids)
+        return len(self.image_paths)
     
 
     def __getitem__(self, index):
@@ -45,21 +43,22 @@ class BasicImageSequence(Sequence):
         Gets a tuple of an image and an emotion label.
         """
 
-        X = load_image(self.ids[index], self.partition_folder)
-        y = np.array(to_categorical(self.emotion_map[self.ids[index]], 11))
+        image_path = self.image_paths[index]
+        X = load_image(image_path, self.image_data_map)
+        y = np.array(to_categorical(self.image_data_map[image_path]["emotion"], 11))
 
         # Must pad some extra dimension or tensorflow will complain when hooking up to model
         X = np.expand_dims(X, axis=0) 
         y = np.expand_dims(y, axis=0)
         
-        return X, y
+        return preprocess_input(X), y
     
 
     def on_epoch_end(self):
         """
         Shuffles the data on the end of every epoch. 
         """
-        random.shuffle(self.ids)
+        random.shuffle(self.image_paths)
 
 
 class TrainingSequence(Sequence):
@@ -73,17 +72,15 @@ class TrainingSequence(Sequence):
 
     See: tensorflow.org/api_docs/python/tf/keras/utils/Sequence for more info.
 
-    @param emotion_map Map<Int, Int> that maps image ids to an emotion.
-    @param partition_folder Folder that contains the images to read.
+    @param image_data_map Map<Int, Int> that maps image ids to an emotion.
     @param batch_size Batch size to use. 
     """
 
-    def __init__(self, emotion_map, partition_folder, batch_size):
+    def __init__(self, image_data_map, batch_size):
         
-        self.emotion_map = emotion_map
-        self.partition_folder = partition_folder
+        self.image_data_map = image_data_map
         self.batch_size = batch_size
-        self.emotion_lists = self.__separate_classes__(emotion_map)
+        self.emotion_lists = self.__separate_classes__(image_data_map)
         self.min_class_size = self.__calculate_min_class_size__(self.emotion_lists)
         self.current_ids = self.__calculate_current_ids__()
 
@@ -104,28 +101,28 @@ class TrainingSequence(Sequence):
         return self.__data_generation__(batch_ids)
 
 
-    def __data_generation__(self, ids):
+    def __data_generation__(self, image_paths):
         """
         Generates a tuple containing the image arrays and emotion labels for the given IDs
 
         @param ids Array of image IDs to load data for.
         """
         
-        X = np.array(list(map(self.__load_augmented_image__, ids)))
-        y = np.array(to_categorical(list(map(lambda id: self.emotion_map[id], ids)), 11))
+        X = np.array(list(map(self.__load_augmented_image__, image_paths)))
+        y = np.array(to_categorical(list(map(lambda path: self.image_data_map[path]["emotion"], image_paths)), 11))
 
         # Since we are using Resnet50, we preprocess the images in the way it expects.
         return preprocess_input(X), y
     
 
-    def __load_augmented_image__(self, image_id):
+    def __load_augmented_image__(self, image_path):
         """
         Loads a single image as a 2d numpy array given an id.
 
         @param image_id Id of image to load.
         """
         
-        image = load_image(image_id, self.partition_folder)
+        image = load_image(image_path, self.image_data_map)
         return random_flip_left_right(image)
 
 
@@ -139,22 +136,22 @@ class TrainingSequence(Sequence):
         return min(list(map(lambda lst: len(lst), emotion_lists.values())))
 
 
-    def __separate_classes__(self, emotion_map):
+    def __separate_classes__(self, image_data_map):
         """
         Takes of Map<Int, Int> where the first value represents the image ID and the second value
         represents an emotion label, and transforms it into a Map<Int, List<Int>> where the first value
         is an emotion label, and the list contain the IDs of all the images that have that emotion.
 
-        @param emotion_map Map<Int, Int> that maps image IDs to emotions.
+        @param image_data_map Map<Int, Int> that maps image IDs to emotions.
         """
 
         emotion_lists = dict()
-        for id in self.emotion_map:
+        for path in self.image_data_map:
 
-            if emotion_map[id] not in emotion_lists:
-                emotion_lists[emotion_map[id]] = []
+            if image_data_map[path]["emotion"] not in emotion_lists:
+                emotion_lists[image_data_map[path]["emotion"]] = []
 
-            emotion_lists[emotion_map[id]].append(id)
+            emotion_lists[image_data_map[path]["emotion"]].append(path)
 
         return emotion_lists
 
@@ -187,23 +184,16 @@ class TrainingSequence(Sequence):
 
 
 # TODO Run image through face extractor and return distored image.
-def load_image(image_id, partition_folder):
+def load_image(image_path, image_data_map):
     """
     Loads a single image as a 2d numpy array given an id.
 
-    @image_id Id of image to load.
-    @partition_folder Folder containing the image.
+    @image_path Path to the image to load
+    @image_data_map Map containing information about a training image.
     """
 
-    image = mpimg.imread(f"{partition_folder}/{image_id}.jpg")
+    image = mpimg.imread(image_path)
     
-    # Get most likely bounds for face.
-    bounds = get_face_bounding_boxes(image, 0.0, 1)
-
     # If no face was found we will just use the entire image.
-    if len(bounds) > 0:
-        image = extract_faces(image, bounds)[0]
-    else:
-        print(f"Could not locate face in image with id: {image_id}")
-
-    return image 
+    # Use a confidence of zero as a placeholder.
+    return extract_faces(image, [(0, *image_data_map[image_path]["bounds"])])[0]
