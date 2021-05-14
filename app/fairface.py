@@ -109,3 +109,58 @@ def predict_race7(face):
 
     return [race_preds_fair, age_preds_fair, gender_preds_fair]
 
+
+def race4_label(num):
+    if num == 0:
+        return 'White'
+    elif num == 1:
+        return 'Black'
+    elif num == 2:
+        return 'Asian'
+    elif num == 3:
+        return 'Indian'
+
+
+def race7_label(num):
+    if num == 0:
+        return 'White'
+    elif num == 1:
+        return 'Black'
+    elif num == 2:
+        return 'Latino_Hispanic'
+    elif num == 3:
+        return 'East Asian'
+    elif num == 4:
+        return 'Southeast Asian'
+    elif num == 5:
+        return 'Indian'
+    elif num == 6:
+        return 'Middle Eastern'
+
+
+def age_label(num):
+    if num == 0:
+        return '0-2'
+    elif num == 1:
+        return '3-9'
+    elif num == 2:
+        return '10-19'
+    elif num == 3:
+        return '20-29'
+    elif num == 4:
+        return '30-39'
+    elif num == 5:
+        return '40-49'
+    elif num == 6:
+        return '50-59'
+    elif num == 7:
+        return '60-69'
+    elif num == 8:
+        return '70+'
+
+
+def gender_label(num):
+    if num == 0:
+        return 'Male'
+    elif num == 1:
+        return 'Female'

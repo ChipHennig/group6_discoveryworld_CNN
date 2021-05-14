@@ -142,7 +142,6 @@ def calculate_extra_data(emotion_mappings, fair_face_function):
 
     return image_data
 
-
 def cache_emotions():
 
     """
