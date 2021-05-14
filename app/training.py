@@ -8,13 +8,14 @@ import matplotlib.pyplot as plt
 import os
 import argparse
 import sys
+import csv
 from tensorflow.keras.layers import Dense, Input, Dropout, GlobalAveragePooling2D, Flatten, Conv2D, BatchNormalization, Activation, MaxPooling2D
 from tensorflow.keras.models import Model, load_model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras import Sequential
 from tensorflow.keras.layers import Conv2D, Flatten, Dense
 from tensorflow.keras.utils import Sequence
-from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
+from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, LambdaCallback
 from tensorflow.keras.applications.resnet import ResNet50
 from pathlib import Path
 
@@ -70,18 +71,25 @@ def train_model(model, training_data, validation_data, epochs, batch_size, save_
         monitor='val_loss', factor=0.1, patience=3, verbose=0,
         mode='auto', min_delta=0.0001, cooldown=0, min_lr=0
     )
+    
+    csv_log = open(save_directory + '/loss_accuracy_log.csv', mode='wt', buffering=1)
+    writer = csv.writer(csv_log)
+    
+    test_history = LambdaCallback(
+        on_batch_end=lambda batch, logs: writer.writerow([logs['loss'], logs['accuracy']]),
+    )
 
     # TODO I think we can store history? Could be helpful for displaying graphs and stuff later.
-    history = model.fit_generator(
+    model.fit_generator(
         generator=train_generator,
         steps_per_epoch=len(train_generator),
         epochs=epochs,
         validation_data = validation_generator,
         validation_steps = len(validation_generator),
-        callbacks = [checkpoint_callback, learning_rate_callback]
+        callbacks = [checkpoint_callback, learning_rate_callback, test_history]
     )
 
-    return model, history
+    return model
 
 
 def get_commandline_args():
@@ -127,7 +135,7 @@ model = create_model() if args.model_file is None else load_model(args.model_fil
 filtered_training_data = filter_emotion_data(read_cached_data("train"), [4, 5, 7, 8, 9, 10])
 filtered_validation_data = filter_emotion_data(read_cached_data("validation"), [4, 5, 7, 8, 9, 10])
 
-trained_model, history = train_model(
+trained_model = train_model(
     model,
     filtered_training_data,
     filtered_validation_data,
