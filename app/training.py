@@ -37,7 +37,7 @@ def create_model():
     return new_model
 
 
-def train_model(model, training_data, validation_data, epochs, batch_size, save_directory):
+def train_model(model, training_data, validation_data, epochs, batch_size, save_directory, strat_classes):
     """
     Trains a model with the given training and validation data.
 
@@ -56,7 +56,7 @@ def train_model(model, training_data, validation_data, epochs, batch_size, save_
     model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
 
     # Initialize generators that only load small portion of dataset to train on at a time.
-    train_generator = TrainingSequence(training_data, batch_size)
+    train_generator = TrainingSequence(training_data, batch_size, strat_classes)
     validation_generator = BasicImageSequence(validation_data)
 
     # Include the epoch in the file name (uses `str.format`)
@@ -141,7 +141,8 @@ trained_model = train_model(
     filtered_validation_data,
     args.epochs,
     args.batch_size,
-    args.save_directory
+    args.save_directory,
+    "emotion"
 )
 
 trained_model.save(args.save_directory + "/TrainedModel")

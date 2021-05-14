@@ -73,15 +73,16 @@ class TrainingSequence(Sequence):
     See: tensorflow.org/api_docs/python/tf/keras/utils/Sequence for more info.
 
     @param image_data_map Map<Int, Int> that maps image ids to an emotion.
-    @param batch_size Batch size to use. 
+    @param batch_size Batch size to use.
+    @param strat_classes String or list of classes to stratify by ([] for no strat) 
     """
 
-    def __init__(self, image_data_map, batch_size):
-        
+    def __init__(self, image_data_map, batch_size, strat_classes):
         self.image_data_map = image_data_map
         self.batch_size = batch_size
-        self.emotion_lists = self.__separate_classes__(image_data_map)
-        self.min_class_size = self.__calculate_min_class_size__(self.emotion_lists)
+        self.strat_classes = [strat_classes] if isinstance(strat_classes, str) else strat_classes
+        self.class_lists = self.__separate_classes__(image_data_map)
+        self.min_class_size = self.__calculate_min_class_size__(self.class_lists)
         self.current_ids = self.__calculate_current_ids__()
 
 
@@ -126,14 +127,14 @@ class TrainingSequence(Sequence):
         return random_flip_left_right(image)
 
 
-    def __calculate_min_class_size__(self, emotion_lists):
+    def __calculate_min_class_size__(self, class_lists):
         """
         Returns the number of images the class with the least amount of examples has.
 
         @param emotions_lists Map<Int, List<Int>> that maps emotions to a list of images that show that emotion.
         """
 
-        return min(list(map(lambda lst: len(lst), emotion_lists.values())))
+        return min(list(map(lambda lst: len(lst), class_lists.values())))
 
 
     def __separate_classes__(self, image_data_map):
@@ -145,15 +146,15 @@ class TrainingSequence(Sequence):
         @param image_data_map Map<Int, Int> that maps image IDs to emotions.
         """
 
-        emotion_lists = dict()
+        class_lists = dict()
         for path in self.image_data_map:
+            class_name = map(lambda cat: str(image_data_map[path][cat]), self.strat_classes)
+            class_name = "-".join(class_name)
+            if class_name not in class_lists:
+                class_lists[class_name] = []
+            class_lists[class_name].append(path)
 
-            if image_data_map[path]["emotion"] not in emotion_lists:
-                emotion_lists[image_data_map[path]["emotion"]] = []
-
-            emotion_lists[image_data_map[path]["emotion"]].append(path)
-
-        return emotion_lists
+        return class_lists
 
 
     def __calculate_current_ids__(self):
@@ -166,10 +167,10 @@ class TrainingSequence(Sequence):
 
         current_ids = []
 
-        for emotion in self.emotion_lists:
+        for category in self.class_lists:
 
-            random.shuffle(self.emotion_lists[emotion])
-            current_ids.extend(self.emotion_lists[emotion][:self.min_class_size])
+            random.shuffle(self.class_lists[category])
+            current_ids.extend(self.class_lists[category][:self.min_class_size])
 
         random.shuffle(current_ids)
 
